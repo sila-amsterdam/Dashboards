@@ -1,0 +1,414 @@
+{
+  "name": "Chatbot Backend - Webhook",
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "name": "Chatbot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "chatbot-webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-validate",
+      "name": "Valideer Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst sessionId = (body.sessionId || '').trim().substring(0, 100);\nconst message = (body.message || '').trim().substring(0, 2000);\nconst companyId = (body.companyId || 'default').trim().substring(0, 100);\n\nif (!sessionId || !message) {\n  throw new Error('sessionId en message zijn verplicht');\n}\n\nreturn [{ json: { sessionId, message, companyId, timestamp: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "node-memory-read",
+      "name": "Lees Geheugen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [480, 180],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT role, content FROM chatbot_memory WHERE session_id = '{{ $json.sessionId }}' ORDER BY created_at DESC LIMIT 10",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "n8n Cloud Postgres"
+        }
+      }
+    },
+    {
+      "id": "node-knowledge",
+      "name": "Lees Bedrijfskennis",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [480, 420],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT category, question, answer FROM chatbot_knowledge WHERE company_id = '{{ $('Valideer Input').item.json.companyId }}' AND active = true ORDER BY category LIMIT 50",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "n8n Cloud Postgres"
+        }
+      }
+    },
+    {
+      "id": "node-build-prompt",
+      "name": "Bouw AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300],
+      "parameters": {
+        "jsCode": "const validated = $('Valideer Input').item.json;\nconst memoryRows = $('Lees Geheugen').all();\nconst knowledgeRows = $('Lees Bedrijfskennis').all();\n\n// Conversatiegeschiedenis: omgekeerd ophalen → chronologisch\nconst history = memoryRows\n  .map(r => r.json)\n  .reverse()\n  .map(r => ({ role: r.role, content: r.content }));\n\n// Kennisbasis tekst\nconst knowledge = knowledgeRows\n  .map(r => r.json)\n  .map(r => `V: ${r.question}\\nA: ${r.answer}`)\n  .join('\\n\\n');\n\nconst systemPrompt = `Je bent een behulpzame assistent voor ${validated.companyId}.\\n\\nBEDRIJFSKENNIS:\\n${knowledge || 'Geen specifieke kennis beschikbaar. Verwijs bij complexe vragen naar de klantenservice.'}\\n\\nINSTRUCTIES:\\n- Antwoord altijd in de taal van de gebruiker\\n- Houd antwoorden bondig en to-the-point\\n- Als iemand een afspraak wil boeken, bevestig dit en gebruik appointment_intent: true\\n- Verwijs bij twijfel naar de klantenservice`;\n\nconst messages = [\n  ...history,\n  { role: 'user', content: validated.message }\n];\n\nreturn [{ json: {\n  sessionId: validated.sessionId,\n  companyId: validated.companyId,\n  userMessage: validated.message,\n  claudeBody: {\n    model: 'claude-haiku-4-5-20251001',\n    max_tokens: 1024,\n    system: systemPrompt,\n    tools: [{\n      name: 'chatbot_response',\n      description: 'Geef een gestructureerde chatbot respons',\n      input_schema: {\n        type: 'object',\n        properties: {\n          answer: {\n            type: 'string',\n            description: 'Het antwoord voor de gebruiker'\n          },\n          appointment_intent: {\n            type: 'boolean',\n            description: 'Wil de gebruiker een afspraak boeken?'\n          },\n          preferred_datetime: {\n            type: 'string',\n            description: 'Gewenste datum/tijd als appointment_intent true is'\n          }\n        },\n        required: ['answer', 'appointment_intent']\n      }\n    }],\n    tool_choice: { type: 'tool', name: 'chatbot_response' },\n    messages\n  }\n} }];"
+      }
+    },
+    {
+      "id": "node-claude",
+      "name": "Roep Claude Aan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.claudeBody) }}",
+        "options": {
+          "retry": {
+            "enabled": true,
+            "maxTries": 3,
+            "waitBetweenTries": 1000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "id": "node-parse",
+      "name": "Parse Respons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300],
+      "parameters": {
+        "jsCode": "const resp = $('Roep Claude Aan').item.json;\nconst meta = $('Bouw AI Prompt').item.json;\n\nconst toolUse = (resp.content || []).find(c => c.type === 'tool_use');\nconst input = toolUse ? toolUse.input : {};\n\nconst answer = input.answer || 'Sorry, ik kon geen antwoord genereren. Probeer het opnieuw.';\nconst appointmentIntent = input.appointment_intent === true;\nconst preferredDatetime = input.preferred_datetime || null;\n\nreturn [{ json: {\n  sessionId: meta.sessionId,\n  companyId: meta.companyId,\n  userMessage: meta.userMessage,\n  answer,\n  appointmentIntent,\n  preferredDatetime\n} }];"
+      }
+    },
+    {
+      "id": "node-intent-check",
+      "name": "Afspraak Intentie?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.appointmentIntent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-book",
+      "name": "Boek Afspraak",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 160],
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  summary: 'Chatbot Afspraak - ' + $json.companyId,\n  description: 'Sessie: ' + $json.sessionId + '\\nVraag: ' + $json.userMessage,\n  start: {\n    dateTime: new Date(Date.now() + 86400000).toISOString(),\n    timeZone: 'Europe/Amsterdam'\n  },\n  end: {\n    dateTime: new Date(Date.now() + 90000000).toISOString(),\n    timeZone: 'Europe/Amsterdam'\n  }\n}) }}",
+        "options": {
+          "continueOnFail": true
+        }
+      },
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "id": "node-memory-user",
+      "name": "Sla Gebruikersbericht Op",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1920, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO chatbot_memory (session_id, company_id, role, content) VALUES ('{{ $('Parse Respons').item.json.sessionId }}', '{{ $('Parse Respons').item.json.companyId }}', 'user', '{{ $('Parse Respons').item.json.userMessage.replace(/'/g, \"''\") }}')",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "n8n Cloud Postgres"
+        }
+      }
+    },
+    {
+      "id": "node-memory-assistant",
+      "name": "Sla Assistantbericht Op",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2160, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO chatbot_memory (session_id, company_id, role, content) VALUES ('{{ $('Parse Respons').item.json.sessionId }}', '{{ $('Parse Respons').item.json.companyId }}', 'assistant', '{{ $('Parse Respons').item.json.answer.replace(/'/g, \"''\") }}')",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "n8n Cloud Postgres"
+        }
+      }
+    },
+    {
+      "id": "node-respond",
+      "name": "Stuur Antwoord",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2400, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  answer: $('Parse Respons').item.json.answer,\n  sessionId: $('Parse Respons').item.json.sessionId,\n  appointmentBooked: $('Parse Respons').item.json.appointmentIntent,\n  timestamp: new Date().toISOString()\n}) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "node-error-respond",
+      "name": "Fout Respons",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 560],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  error: true,\n  answer: 'Er is een fout opgetreden. Probeer het opnieuw.',\n  timestamp: new Date().toISOString()\n}) }}",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chatbot Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valideer Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valideer Input": {
+      "main": [
+        [
+          {
+            "node": "Lees Geheugen",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lees Bedrijfskennis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Fout Respons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lees Geheugen": {
+      "main": [
+        [
+          {
+            "node": "Bouw AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lees Bedrijfskennis": {
+      "main": [
+        [
+          {
+            "node": "Bouw AI Prompt",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Bouw AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Roep Claude Aan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Roep Claude Aan": {
+      "main": [
+        [
+          {
+            "node": "Parse Respons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Respons": {
+      "main": [
+        [
+          {
+            "node": "Afspraak Intentie?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Afspraak Intentie?": {
+      "main": [
+        [
+          {
+            "node": "Boek Afspraak",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sla Gebruikersbericht Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boek Afspraak": {
+      "main": [
+        [
+          {
+            "node": "Sla Gebruikersbericht Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sla Gebruikersbericht Op": {
+      "main": [
+        [
+          {
+            "node": "Sla Assistantbericht Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sla Assistantbericht Op": {
+      "main": [
+        [
+          {
+            "node": "Stuur Antwoord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "chatbot" },
+    { "name": "v1" },
+    { "name": "productie" }
+  ]
+}

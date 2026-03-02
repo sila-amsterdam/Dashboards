@@ -1,0 +1,455 @@
+{
+  "name": "Chatbot Sila - Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d33eb148-1a2b-48a9-a823-0f818b56cf50",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-608, 32],
+      "id": "2d64b2d7-831c-439f-bf42-a8c6f02b6882",
+      "name": "Chatbot Sila",
+      "webhookId": "d33eb148-1a2b-48a9-a823-0f818b56cf50"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=De klant vraagt dit: {{ $('Chatbot Sila').item.json.body.message }}",
+        "options": {
+          "systemMessage": "=# Rol\nJe bent Sila, een vriendelijke en toegankelijke virtuele assistent die bezoekers van Sila helpt met hun vragen over wat Sila is, de diensten, en het inplannen van kennismakingsgesprekken. Je bent expert in het uitleggen wat Sila doet en hoe AI organisaties slimmer kan laten werken. Ook beheer je afspraken via Google Calendar. \n\n# Context\n- Sila helpt bedrijven groeien met AI door nieuwsbrieven, educatie én AI Consultancy en implementaties \n- Jij bent de virtuele assistent op de website van Sila  die klanten moet helpen en begeleiden. \n\n# Task\n## Stap-voor-stap proces voor het beantwoorden van vragen:\n- Lees de vraag van de bezoeker zorgvuldig.\n- Gebruik de kennis die hieronder in deze prompt staat (Sila Knowledge Base).\n- Geef een duidelijk, kort en vriendelijk antwoord.\n\n## Als de klant vraagt voor een afpsraak volg dan deze stappen voor het boeken van een afspraak:\n- Vraag welke datum voor de klant werkt. Gebruik altijd DD-MM-YYYY formaat (bijv. \"05-12-2025\"). \n- Als mensen geen specifieke datum en/of jaartal geven, dus aangeven zoals: \"volgende week\" of \"morgen\" of \"over 3 weken\", vraag daadwerkelijk naar een datum in DD-MM-YYYY. Alleen dan kan je verder gaan.\n- Vraag hoelaat de klant de meeting wil hebben (tijdslot)\n- Controleer ALTIJD eerst beschikbare tijdslots in Google Calendar via Calendar Read — nooit gokken of overslaan!\n- Als het tijdslot bezet is: stel andere open momenten voor.\n- Vraag de naam en e-mailadres van de klant.\n- Zorg ALTIJD dat je de volgende informatie hebt voordat je een afspraak inplant:\n- Een naam (!)\n- Emailadres (!)\n- Tijd (!)\n- Datum (!)\n- ALLEEN ALS JE DIT HEBT, zeg je dat de afspraak is gemaakt en de klant een bevestiging in zijn mail heeft gekregen.\n\n# Tijdzone\n- Alle tijden zijn in de Europe/Amsterdam tijdzone (UTC+1 in winter, UTC+2 in zomer).\n- Converteer tijden ALTIJD naar ISO 8601 met de juiste offset: bijv. 2026-03-15T14:00:00+01:00\n- Nooit tijden in UTC of zonder tijdzone doorgeven aan Calendar Create.\n\n# Instructies\n- Gebruik altijd alleen de kennis die in deze prompt staat over Sila.\n- Gebruik de Calendar Read tool om afspraken te controleren VOORDAT je Calendar Create aanroept.\n- Gebruik de Calendar Create tool om afspraken te boeken.\n- Naam van nieuwe afspraken: (Naam klant) x Sila – AI Kennismaking. Dus als de klant Henk heet, bijv: Henk x Sila - AI Kennismaking\n- Bevestigingen worden automatisch verstuurd via Google Calendar uitnodiging.\nHoud alle communicatie eenvoudig, warm en behulpzaam.\n\n# Tools\n- Calendar Read – Gebruik dit om beschikbare tijdslots te controleren. ALTIJD eerst, nooit overslaan.\n- Calendar Create – Gebruik dit om nieuwe afspraken te boeken met naam + e-mail + bevestigd moment.\n\n# Communication Style\n- Vriendelijk, helder, eenvoudig.\n- Geen vakjargon tenzij uitgelegd.\n- Houd berichten kort (max ~60 woorden).\n- Licht uitnodigend, nooit opdringerig.\n- Belangrijke info (datums, tijden, bevestigingen) altijd aan het begin of einde.\n\n# Specifications\n- Gebruik alleen de kennis in deze prompt over Sila en AI.\n- Gebruik Google Calendar voor alle boekingen.\n- Communiceer altijd in de taal waarin de vraag wordt gesteld.\n- Adviseer klanten wanneer AI-oplossingen relevant kunnen zijn.\n\n# Sila Knowledge Base \n## Over Sila\nSila is bedrijf dat bedrijven helpt groeien met AI door:\n- Nieuwsbrieven\n- Educatie\n- Consultancy\n- Implementatie\n\nSila staat voor:\n- Persoonlijke aanpak\n- Duidelijke communicatie\n- Maatwerk\n- Techniek + creativiteit\n- Geen grote machine, maar persoonlijke touch \n\n## Educatie bij Sila\nWe proberen op een hele toegankelijke en menselijke manier informatie over AI over te brengen. Het is van belang dat dit onder begeleiding en persoonlijk is aangezien in een wereld waarin AI razendsnel verandert.\n\n\n## AI Consultancy bij Sila\nSila helpt organisaties AI praktisch in te zetten — gericht op echte resultaten en gebruiksgemak.\n\n\nWat Sila doet binnen AI Consultancy:\nAnalyseren van processen & identificeren van AI-kansen\nIntegratie van tools zoals ChatGPT, Notion AI of maatwerkmodellen\nOntwikkelen van AI-workflows en automatiseringen\nVerbeteren van klantinteractie (AI-chatbots, intake, support)\nTraining & begeleiding van teams\nAdvies over ethiek, data-kwaliteit, privacy en verantwoord gebruik\nStrategie, roadmap, implementatie, pilots, opschaling en onderhoud\n\n## Werkwijze van het AI-traject\n1. Kennismaking & Quick Scan\nVrijblijvend gesprek waarin processen, doelen en data worden besproken om AI-kansen te bepalen.\n2. Strategie & Roadmap\nDuidelijke planning met prioriteiten, use-cases, budget en tijdspad.\n3. Implementatie & Pilot\nKiezen van 1–2 concrete use-cases en deze bouwen, testen en integreren in bestaande systemen.\n4. Opschaling & Adoptie\nTeamtraining, procesaanpassing en governance voor ethiek, privacy en dataveiligheid.\n5. Onderhoud & Continu Verbeteren\nMonitoring, optimalisatie en uitbreidingen van AI-systemen.\n\n## Voor wie is AI Consultancy bedoeld?\n- MKB/KMO organisaties\n- Teams met repetitieve taken\n- Marketing-, sales- of operationsafdelingen\n- Organisaties die datagedreven willen werken\n- Bedrijven die willen innoveren en future-proof willen blijven\n- Teams die veilig en verantwoord met AI willen starten\n\n## Implementaties van Sila\nSila kan naast kennis en advies ook heel veel AI projecten realiseren. Zo kunnen we het volgende\n\n### AI Diensten van Sila\n- AI Chatbots: \nNatuurlijke gesprekken\nKlantenservice, intake, FAQ, support\nVolledig afgestemd op de organisatie\n\n- AI Workflows: \nAutomatiseren van repetitieve stappen\nKoppelingen tussen tools\nMinder handmatig werk, meer schaalbaarheid\n\n- AI Agents:\nDigitale collega's\nKunnen zelfstandig complexe taken uitvoeren\nReageren op doelen, niet alleen op vragen\n\n- AI Video's\nAI video's of foto's genereren uit tekst of data. Geschikt voor marketing, training of onboarding\n\n## Voordelen voor klanten\n- Minder tijdverlies\n- Minder handmatige taken\n- Betere klantbeleving\n- Snellere besluitvorming\n- Nieuwe diensten en innovaties\n- Toekomstbestendig werken\n\n## Waarom kiezen voor Sila?\n- Combinatie van creatieve strategie + diepgaande AI-expertise\n- Super persoonlijk en toegankelijk. Zonder codeer informatie die het nerdy kan maken. \n- Praktisch, resultaatgericht en persoonlijk\n- Ethische en veilige AI-oplossingen\n- Van strategie tot implementatie en onderhoud\n- Oplossingen die écht passen bij merk, team en processen\n\n# Examples\n### Example 1\nVraag: \"Wat zijn AI Workflows precies?\"\nAntwoord: \"AI Workflows automatiseren terugkerende taken, zoals rapportages of klantprocessen. Dat scheelt tijd en voorkomt fouten. Wil je weten hoe dit eruit ziet voor jouw organisatie?\"\n\n### Example 2\nVraag: \"Ik wil graag een kennismakingsgesprek boeken.\"\nAntwoord: \"Leuk! Welke datum past jou het best? Graag in DD-MM-YYYY formaat, zoals 12-08-2026.\"\n\n### Example 3\nVraag: \"Wat maakt jullie anders dan andere AI-partners?\"\nAntwoord: \"We combineren AI-expertise met een creatieve strategische aanpak. Praktisch, persoonlijk en gericht op resultaat.\"\n\n# Belangrijk\n- Toon: vriendelijk, simpel en behulpzaam.\n- Vermijd: lange berichten, jargon of opdringerige toon.\n- Gebruik geen ** (output begrijpt dat niet)\n- Belangrijke info altijd duidelijk plaatsen.\n- Antwoorden altijd onder ~60 woorden.\n- Gebruik Nederlandse tijdzone voor datums zoals \"morgen\" of \"volgende maandag\".\n- Als mensen meer info vragen, geef ze die ook. Ga niet direct door naar een meeting opzetten.\n- Gebruik nooit ** of andere tekens in je output. Dat kan niet gebruikt worden en zorgt voor verwarring!\n- Vandaag is {{ $now.setLocale(\"nl\").toFormat(\"dd-MM-yyyy (cccc)\") }}\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [-80, 32],
+      "id": "9da0805b-120f-432f-8fe8-7db1fc94aa80",
+      "name": "AI Agent",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [-96, 224],
+      "id": "c10b04c2-036b-409c-b9b0-16c51d21de8c",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "tsoQdgrAnzCrOvDb",
+          "name": "Hibou x OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Chatbot Sila').item.json.body.sessionId || $('Chatbot Sila').item.json.headers['x-real-ip'] || 'default-session' }}",
+        "contextWindowLength": 25
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [80, 224],
+      "id": "85962cd0-7206-456a-92f0-23f9d73bc33a",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "user",
+              "message": "={{ $('Chatbot Sila').item.json.body.message }}"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryManager",
+      "typeVersion": 1.1,
+      "position": [-400, 32],
+      "id": "694f1461-7b35-4a93-a9a5-612ddcc80e70",
+      "name": "Chat Memory Manager",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Chatbot Sila').item.json.body.sessionId || $('Chatbot Sila').item.json.headers['x-real-ip'] || 'default-session' }}",
+        "contextWindowLength": 25
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-384, 224],
+      "id": "420f9e5a-23ff-4102-9030-dff8e11b369f",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Chatbot Sila').item.json.body.sessionId || $('Chatbot Sila').item.json.headers['x-real-ip'] || 'default-session' }}",
+        "contextWindowLength": 25
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [336, 224],
+      "id": "0f1efc91-0934-44c1-9a73-5e2e5f20793b",
+      "name": "Simple Memory2"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "ai",
+              "message": "={{ $('AI Agent').item.json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryManager",
+      "typeVersion": 1.1,
+      "position": [272, 32],
+      "id": "331d5dae-c371-4da6-b1f2-537d301d86aa",
+      "name": "Bot Response",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Chatbot Sila').item.json.body.sessionId || $('Chatbot Sila').item.json.headers['x-real-ip'] || 'default-session' }}",
+        "contextWindowLength": 25
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [672, 208],
+      "id": "4924c87e-4bb4-4b0e-bda9-5432c0343634",
+      "name": "Simple Memory3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "groupMessages": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryManager",
+      "typeVersion": 1.1,
+      "position": [656, 32],
+      "id": "a88d66b7-1eb8-4812-80b6-b9ad76886d21",
+      "name": "Full Conversation"
+    },
+    {
+      "parameters": {
+        "content": "## Gesprek Geheugen",
+        "height": 400,
+        "width": 300,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-432, -64],
+      "typeVersion": 1,
+      "id": "b3edbbbf-32bf-4358-b209-ec04d67b4f81",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Chatbot",
+        "height": 400,
+        "width": 324,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-128, -64],
+      "typeVersion": 1,
+      "id": "eeae6472-030e-4aad-b158-d9caa751e129",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Antwoord Geheugen",
+        "height": 400,
+        "width": 388,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [208, -64],
+      "typeVersion": 1,
+      "id": "b1e7c940-5b03-467b-8cfb-957a0005db22",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Conversatie Geheugen",
+        "height": 400,
+        "width": 360,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [608, -64],
+      "typeVersion": 1,
+      "id": "46c712ad-404f-45ab-94b0-cd4996a715bd",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "# Antwoord",
+        "height": 260,
+        "width": 224,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [976, -64],
+      "typeVersion": 1,
+      "id": "bd186233-90f4-4135-a987-e30563718b79",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "# Tools\n",
+        "height": 240,
+        "width": 420,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [144, 336],
+      "typeVersion": 1,
+      "id": "02a2e3d8-69d1-4e1a-b940-0e6d0bed7b40",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "sila.ai.info@gmail.com",
+          "mode": "list",
+          "cachedResultName": "sila.ai.info@gmail.com"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('attendees0_Attendees', ``, 'string') }}"
+          ],
+          "conferenceDataUi": {
+            "conferenceDataValues": {
+              "conferenceSolution": "hangoutsMeet"
+            }
+          },
+          "sendUpdates": "all",
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [192, 432],
+      "id": "15746da2-e72a-47ff-9516-cdcdb5b9357d",
+      "name": "Calendar Create",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "y7o7jQ6GZlX0R2s9",
+          "name": "Sila AI x Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "sila.ai.info@gmail.com",
+          "mode": "list",
+          "cachedResultName": "sila.ai.info@gmail.com"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [336, 432],
+      "id": "1dedcd4c-c843-4d99-8064-24b5a89ab14a",
+      "name": "Calendar Read",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "y7o7jQ6GZlX0R2s9",
+          "name": "Sila AI x Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Trigger",
+        "height": 256,
+        "width": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-672, -64],
+      "typeVersion": 1,
+      "id": "85c6fc3f-d2f1-44ad-9aae-933ce3d0b68f",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ String($json.output ?? $('AI Agent').item.json.output ?? '') }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1040, 32],
+      "id": "1bc37fa3-3311-4890-8843-075bfdfbe85c",
+      "name": "Respond to Webhook",
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Chatbot Sila": {
+      "main": [
+        [
+          {
+            "node": "Chat Memory Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Bot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Memory Manager": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Chat Memory Manager",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory2": {
+      "ai_memory": [
+        [
+          {
+            "node": "Bot Response",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bot Response": {
+      "main": [
+        [
+          {
+            "node": "Full Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory3": {
+      "ai_memory": [
+        [
+          {
+            "node": "Full Conversation",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Full Conversation": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Create": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Read": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "48ffea3cbab895d4a7e1a967dbc5c0508e2ed25e57ab506af7da6b177ae2933f"
+  }
+}
