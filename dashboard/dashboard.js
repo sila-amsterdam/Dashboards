@@ -1,53 +1,55 @@
 /**
- * Chat Widget Dashboard – Logica
- *
- * Architectuur:
- *   state       – centrale staat (widgets, huidige view, editing ID)
- *   API         – fetch wrappers voor de Express server
- *   render*     – pure functies die HTML strings of DOM-elementen teruggeven
- *   show*       – wisselen tussen views
- *   init()      – bootstrapt alles
+ * Chat Widget Dashboard – volledig statisch (localStorage)
+ * Werkt op GitHub Pages én lokaal — geen server vereist.
  */
 
 (function () {
   'use strict';
 
-  // ─── Staat ───────────────────────────────────────────────────────────────────
+  // ─── Opslag (localStorage) ────────────────────────────────────────────────────
 
-  var API_BASE = window.location.origin;   // Zelfde origin als dashboard (geserveerd via Express)
+  var STORAGE_KEY = 'cw_widgets';
+
+  var DB = {
+    read: function () {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { return {}; }
+    },
+    write: function (data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    },
+    list: function () {
+      return Object.values(DB.read());
+    },
+    get: function (id) {
+      return DB.read()[id] || null;
+    },
+    save: function (widget) {
+      var data = DB.read();
+      data[widget.id] = widget;
+      DB.write(data);
+      return widget;
+    },
+    del: function (id) {
+      var data = DB.read();
+      delete data[id];
+      DB.write(data);
+    }
+  };
+
+  // ─── Staat ───────────────────────────────────────────────────────────────────
 
   var state = {
     widgets:   [],
-    editingId: null     // null = nieuw aanmaken
+    editingId: null
   };
 
-  // ─── API laag ────────────────────────────────────────────────────────────────
+  // ─── UUID generator ───────────────────────────────────────────────────────────
 
-  var API = {
-    list: function () {
-      return fetch(API_BASE + '/api/widgets').then(r => r.json());
-    },
-    get: function (id) {
-      return fetch(API_BASE + '/api/widgets/' + id).then(r => r.json());
-    },
-    create: function (data) {
-      return fetch(API_BASE + '/api/widgets', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(data)
-      }).then(r => r.json());
-    },
-    update: function (id, data) {
-      return fetch(API_BASE + '/api/widgets/' + id, {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(data)
-      }).then(r => r.json());
-    },
-    del: function (id) {
-      return fetch(API_BASE + '/api/widgets/' + id, { method: 'DELETE' }).then(r => r.json());
-    }
-  };
+  function genId() {
+    return 'xxxxxxxxxxxxxxxx'.replace(/x/g, function () {
+      return (Math.random() * 16 | 0).toString(16);
+    }).substring(0, 12);
+  }
 
   // ─── Toast ───────────────────────────────────────────────────────────────────
 
@@ -61,7 +63,6 @@
     el.querySelector('.db-toast-icon').innerHTML = type === 'error'
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-
     clearTimeout(toastTimer);
     el.classList.add('show');
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 3000);
@@ -92,13 +93,18 @@
     return 'rgba(' + parseInt(m[1],16) + ',' + parseInt(m[2],16) + ',' + parseInt(m[3],16) + ',' + a + ')';
   }
 
-  // ─── Embed code ophalen (standalone, geen server nodig) ─────────────────────
+  // ─── Embed code genereren (statisch, verwijst naar GitHub Pages widget.js) ───
 
-  function fetchEmbedCode(widgetId) {
-    return fetch(API_BASE + '/api/widgets/' + widgetId + '/embed').then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.text();
-    });
+  var WIDGET_JS_URL = 'https://sila-amsterdam.github.io/Dashboards/widget/widget.js';
+
+  function embedCode(widget) {
+    var cfg = {
+      webhookUrl: widget.webhookUrl,
+      branding:   widget.branding || {},
+      theme:      widget.theme    || {}
+    };
+    var cfgJson = JSON.stringify(cfg).replace(/'/g, '&#39;');
+    return '<script\n  src="' + WIDGET_JS_URL + '"\n  data-config=\'' + cfgJson + '\'>\n<\/script>';
   }
 
   // ─── Widget kaart renderen ────────────────────────────────────────────────────
@@ -151,12 +157,11 @@
   // ─── Kaarten lijst renderen ───────────────────────────────────────────────────
 
   function renderList() {
-    var grid = document.getElementById('db-widget-grid');
+    var grid  = document.getElementById('db-widget-grid');
     var badge = document.getElementById('db-nav-badge');
     if (!grid) return;
 
     if (badge) badge.textContent = state.widgets.length;
-
     var sidebarBadge = document.getElementById('db-nav-badge-sidebar');
     if (sidebarBadge) sidebarBadge.textContent = state.widgets.length;
 
@@ -175,32 +180,23 @@
             'Eerste widget aanmaken' +
           '</button>' +
         '</div>';
-
-      document.getElementById('db-empty-create-btn').addEventListener('click', function () {
-        showForm(null);
-      });
+      document.getElementById('db-empty-create-btn').addEventListener('click', function () { showForm(null); });
       return;
     }
 
     grid.innerHTML = '';
-    state.widgets.forEach(function (w) {
-      var card = renderCard(w);
-      grid.appendChild(card);
-    });
+    state.widgets.forEach(function (w) { grid.appendChild(renderCard(w)); });
 
-    // Events op kaarten
     grid.querySelectorAll('.btn-edit').forEach(function (btn) {
       btn.addEventListener('click', function () { showForm(btn.dataset.id); });
     });
 
     grid.querySelectorAll('.btn-copy-embed').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        fetchEmbedCode(btn.dataset.id)
-          .then(function (code) {
-            copyText(code);
-            toast('Embed code gekopieerd!');
-          })
-          .catch(function () { toast('Kon embed code niet ophalen.', 'error'); });
+        var w = state.widgets.find(function (x) { return x.id === btn.dataset.id; });
+        if (!w) return;
+        copyText(embedCode(w));
+        toast('Embed code gekopieerd!');
       });
     });
   }
@@ -215,7 +211,7 @@
   }
 
   function doUpdatePreview() {
-    var form      = document.getElementById('db-widget-form');
+    var form = document.getElementById('db-widget-form');
     if (!form) return;
 
     var primary   = form.querySelector('[name="theme.primaryColor"]').value || '#6366f1';
@@ -225,7 +221,6 @@
     var toggleLbl = form.querySelector('[name="branding.toggleLabel"]').value || 'Stel ons een vraag';
     var welcome   = form.querySelector('[name="branding.welcomeText"]').value || 'Hallo! Hoe kan ik u helpen?';
 
-    // Header
     var header = document.querySelector('.db-preview-header');
     if (header) header.style.background = 'linear-gradient(135deg,' + primary + ',' + secondary + ')';
 
@@ -244,21 +239,16 @@
     var titleEl = document.querySelector('.db-preview-title');
     if (titleEl) titleEl.textContent = name;
 
-    // Welkomstbericht in preview
     var botMsgs = document.querySelectorAll('.db-preview-msg-bot');
     if (botMsgs.length > 0) botMsgs[0].textContent = truncate(welcome, 60);
 
-    // Berichten kleur (user)
-    var userMsgs = document.querySelectorAll('.db-preview-msg-user');
-    userMsgs.forEach(function (m) {
+    document.querySelectorAll('.db-preview-msg-user').forEach(function (m) {
       m.style.background = 'linear-gradient(135deg,' + primary + ',' + secondary + ')';
     });
 
-    // Send knop
     var sendBtn = document.querySelector('.db-preview-send');
     if (sendBtn) sendBtn.style.background = 'linear-gradient(135deg,' + primary + ',' + secondary + ')';
 
-    // Toggle knop
     var toggle = document.querySelector('.db-preview-toggle');
     if (toggle) {
       toggle.style.background = 'linear-gradient(135deg,' + primary + ',' + secondary + ')';
@@ -276,11 +266,9 @@
 
     if (!widgetId) { block.classList.add('db-hidden'); return; }
     block.classList.remove('db-hidden');
-    pre.textContent = 'Laden…';
 
-    fetchEmbedCode(widgetId)
-      .then(function (code) { pre.textContent = code; })
-      .catch(function () { pre.textContent = 'Kon embed code niet laden.'; });
+    var widget = state.widgets.find(function (x) { return x.id === widgetId; }) || DB.get(widgetId);
+    if (widget) pre.textContent = embedCode(widget);
   }
 
   // ─── Views tonen ─────────────────────────────────────────────────────────────
@@ -291,7 +279,6 @@
     document.getElementById('db-topbar-title').textContent = 'Widgets';
     document.getElementById('db-topbar-sub').textContent = '';
     document.querySelector('.db-nav-item[data-view="list"]').classList.add('active');
-
     loadWidgets();
   }
 
@@ -303,34 +290,23 @@
     document.querySelector('.db-nav-item[data-view="list"]').classList.remove('active');
 
     var isNew = !widgetId;
-
     document.getElementById('db-topbar-title').textContent = isNew ? 'Nieuwe widget' : 'Widget bewerken';
     document.getElementById('db-topbar-sub').textContent = '';
     document.getElementById('db-form-heading').textContent = isNew ? 'Nieuwe widget aanmaken' : 'Widget bewerken';
 
     var deleteBtn = document.getElementById('db-btn-delete');
-    if (isNew) {
-      deleteBtn.classList.add('db-hidden');
-    } else {
-      deleteBtn.classList.remove('db-hidden');
-    }
+    isNew ? deleteBtn.classList.add('db-hidden') : deleteBtn.classList.remove('db-hidden');
 
     if (isNew) {
       resetForm();
       updateEmbedCode(null);
       doUpdatePreview();
     } else {
-      var w = state.widgets.find(function (x) { return x.id === widgetId; });
+      var w = DB.get(widgetId);
       if (w) {
         fillForm(w);
         updateEmbedCode(widgetId);
         doUpdatePreview();
-      } else {
-        API.get(widgetId).then(function (w) {
-          fillForm(w);
-          updateEmbedCode(widgetId);
-          doUpdatePreview();
-        });
       }
     }
   }
@@ -345,7 +321,7 @@
     setField(form, 'theme.secondaryColor', '#4f46e5');
     setField(form, 'theme.primaryHex',     '#6366f1');
     setField(form, 'theme.secondaryHex',   '#4f46e5');
-    syncPresets(form, 'theme.primaryColor', '#6366f1');
+    syncPresets(form, '#6366f1');
   }
 
   function fillForm(w) {
@@ -371,7 +347,7 @@
     setField(form, 'theme.secondaryColor', secondary);
     setField(form, 'theme.primaryHex',     primary);
     setField(form, 'theme.secondaryHex',   secondary);
-    syncPresets(form, 'theme.primaryColor', primary);
+    syncPresets(form, primary);
   }
 
   function setField(form, name, value) {
@@ -407,25 +383,23 @@
   // ─── Kleurinput synchronisatie ────────────────────────────────────────────────
 
   function initColorInputs(form) {
-    // Primary
     var primaryPicker = form.querySelector('[name="theme.primaryColor"]');
     var primaryHex    = form.querySelector('[name="theme.primaryHex"]');
 
     primaryPicker.addEventListener('input', function () {
       primaryHex.value = primaryPicker.value;
-      syncPresets(form, 'theme.primaryColor', primaryPicker.value);
+      syncPresets(form, primaryPicker.value);
       updatePreview();
     });
 
     primaryHex.addEventListener('input', function () {
       if (/^#[0-9a-f]{6}$/i.test(primaryHex.value)) {
         primaryPicker.value = primaryHex.value;
-        syncPresets(form, 'theme.primaryColor', primaryHex.value);
+        syncPresets(form, primaryHex.value);
         updatePreview();
       }
     });
 
-    // Secondary
     var secPicker = form.querySelector('[name="theme.secondaryColor"]');
     var secHex    = form.querySelector('[name="theme.secondaryHex"]');
 
@@ -441,7 +415,6 @@
       }
     });
 
-    // Color presets
     form.querySelectorAll('.db-color-preset').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var primary   = btn.dataset.primary;
@@ -450,13 +423,15 @@
         primaryHex.value    = primary;
         secPicker.value     = secondary;
         secHex.value        = secondary;
-        syncPresets(form, 'theme.primaryColor', primary);
+        syncPresets(form, primary);
         updatePreview();
       });
     });
   }
 
-  function syncPresets(form, fieldName, value) {
+  function syncPresets(form, value) {
+    if (typeof form === 'string') { value = form; form = document.getElementById('db-widget-form'); }
+    if (!form) return;
     form.querySelectorAll('.db-color-preset').forEach(function (btn) {
       btn.classList.toggle('active', btn.dataset.primary === value);
     });
@@ -465,29 +440,10 @@
   // ─── Laden ───────────────────────────────────────────────────────────────────
 
   function loadWidgets() {
-    var grid = document.getElementById('db-widget-grid');
-    if (!grid) return;
-
-    // Skeleton
-    grid.innerHTML = [1,2,3].map(function () {
-      return '<div class="db-card">' +
-        '<div style="height:6px;background:#e2e8f0"></div>' +
-        '<div class="db-card-body" style="gap:10px">' +
-          '<div class="db-skeleton" style="height:16px;width:60%"></div>' +
-          '<div class="db-skeleton" style="height:12px;width:80%"></div>' +
-          '<div class="db-skeleton" style="height:32px;width:100%"></div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-
-    API.list()
-      .then(function (widgets) {
-        state.widgets = Array.isArray(widgets) ? widgets : [];
-        renderList();
-      })
-      .catch(function () {
-        grid.innerHTML = '<div class="db-empty"><h3>Kon widgets niet laden</h3><p>Controleer of de API server draait op ' + API_BASE + '</p></div>';
-      });
+    state.widgets = DB.list().sort(function (a, b) {
+      return (b.createdAt || '') > (a.createdAt || '') ? 1 : -1;
+    });
+    renderList();
   }
 
   // ─── Opslaan ─────────────────────────────────────────────────────────────────
@@ -498,58 +454,45 @@
     var data    = readFormData();
     var saveBtn = document.getElementById('db-btn-save');
 
-    if (!data.name) { toast('Vul een naam in.', 'error'); return; }
+    if (!data.name)       { toast('Vul een naam in.', 'error'); return; }
     if (!data.webhookUrl) { toast('Vul een webhook URL in.', 'error'); return; }
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Opslaan...';
 
-    var promise = state.editingId
-      ? API.update(state.editingId, data)
-      : API.create(data);
+    var now = new Date().toISOString();
 
-    promise
-      .then(function (w) {
-        if (w.error) throw new Error(w.error);
+    var widget;
+    if (state.editingId) {
+      widget = DB.get(state.editingId) || {};
+      Object.assign(widget, data, { updatedAt: now });
+      DB.save(widget);
+      var idx = state.widgets.findIndex(function (x) { return x.id === state.editingId; });
+      if (idx >= 0) state.widgets[idx] = widget;
+    } else {
+      widget = Object.assign({ id: genId(), createdAt: now, updatedAt: now }, data);
+      DB.save(widget);
+      state.widgets.unshift(widget);
+      state.editingId = widget.id;
+      updateEmbedCode(widget.id);
+    }
 
-        if (state.editingId) {
-          var idx = state.widgets.findIndex(function (x) { return x.id === state.editingId; });
-          if (idx >= 0) state.widgets[idx] = w;
-        } else {
-          state.widgets.unshift(w);
-          state.editingId = w.id;
-          updateEmbedCode(w.id);
-        }
-
-        toast(state.editingId ? 'Widget opgeslagen!' : 'Widget aangemaakt!');
-      })
-      .catch(function (err) {
-        toast(err.message || 'Opslaan mislukt.', 'error');
-      })
-      .then(function () {
-        saveBtn.disabled    = false;
-        saveBtn.textContent = 'Opslaan';
-      });
+    toast(state.editingId ? 'Widget opgeslagen!' : 'Widget aangemaakt!');
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Opslaan';
   }
 
   // ─── Verwijderen ─────────────────────────────────────────────────────────────
 
   function deleteWidget() {
     if (!state.editingId) return;
-    var w = state.widgets.find(function (x) { return x.id === state.editingId; });
+    var w    = DB.get(state.editingId);
     var name = w ? w.name : 'dit widget';
-
     if (!confirm('Weet je zeker dat je "' + name + '" wilt verwijderen? Dit kan niet ongedaan worden.')) return;
-
-    API.del(state.editingId)
-      .then(function () {
-        state.widgets = state.widgets.filter(function (x) { return x.id !== state.editingId; });
-        toast('Widget verwijderd.');
-        showList();
-      })
-      .catch(function () {
-        toast('Verwijderen mislukt.', 'error');
-      });
+    DB.del(state.editingId);
+    state.widgets = state.widgets.filter(function (x) { return x.id !== state.editingId; });
+    toast('Widget verwijderd.');
+    showList();
   }
 
   // ─── Kopiëren naar klembord ───────────────────────────────────────────────────
@@ -606,10 +549,8 @@
       '<form id="db-widget-form">' +
         '<div class="db-form-layout">' +
 
-          // ── Linker kolom: formulier ──
           '<div class="db-form-col">' +
 
-            // Sectie: Algemeen
             '<div class="db-section">' +
               '<div class="db-section-header">' +
                 '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>' +
@@ -628,7 +569,6 @@
               '</div>' +
             '</div>' +
 
-            // Sectie: Branding
             '<div class="db-section">' +
               '<div class="db-section-header">' +
                 '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>' +
@@ -663,7 +603,6 @@
               '</div>' +
             '</div>' +
 
-            // Sectie: Thema
             '<div class="db-section">' +
               '<div class="db-section-header">' +
                 '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>' +
@@ -697,14 +636,13 @@
               '</div>' +
             '</div>' +
 
-            // Sectie: Embed code (alleen bij bestaand widget)
             '<div class="db-section db-hidden" id="db-embed-section">' +
               '<div class="db-section-header">' +
                 '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>' +
                 '<h3>Embed code</h3>' +
               '</div>' +
               '<div class="db-section-body">' +
-                '<p style="font-size:13px;color:#64748b">Kopieer dit en plak het voor de <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:12px">&lt;/body&gt;</code> tag. De widget werkt overal — geen eigen server nodig.</p>' +
+                '<p style="font-size:13px;color:#64748b">Kopieer dit en plak het voor de <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:12px">&lt;/body&gt;</code> tag. Werkt op elke website.</p>' +
                 '<div class="db-embed-block">' +
                   '<pre class="db-embed-code" id="db-embed-code-pre"></pre>' +
                   '<button type="button" class="db-embed-copy" id="db-embed-copy-btn">Kopieer</button>' +
@@ -714,7 +652,6 @@
 
           '</div>' +
 
-          // ── Rechter kolom: preview ──
           '<div class="db-form-col">' +
             '<div class="db-section" style="position:sticky;top:80px">' +
               '<div class="db-section-header">' +
@@ -724,8 +661,6 @@
               '<div class="db-section-body" style="padding:16px">' +
                 '<div class="db-preview-wrap">' +
                   '<div class="db-preview-label">Preview</div>' +
-
-                  // Chat venster
                   '<div class="db-preview-window">' +
                     '<div class="db-preview-header" style="background:linear-gradient(135deg,#6366f1,#4f46e5)">' +
                       '<div class="db-preview-logo">' +
@@ -743,13 +678,10 @@
                       '<div class="db-preview-send" style="background:linear-gradient(135deg,#6366f1,#4f46e5)"></div>' +
                     '</div>' +
                   '</div>' +
-
-                  // Toggle knop
                   '<div class="db-preview-toggle" style="background:linear-gradient(135deg,#6366f1,#4f46e5)">' +
                     '<svg viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.82.49 3.53 1.34 5L2.5 21.5l4.5-.84A9.96 9.96 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2z"/></svg>' +
                     '<span class="db-preview-toggle-label">Stel ons een vraag</span>' +
                   '</div>' +
-
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -758,7 +690,6 @@
         '</div>' +
       '</form>' +
 
-      // Formulier footer (sticky)
       '<div class="db-form-footer">' +
         '<button type="button" class="db-btn db-btn-danger db-hidden" id="db-btn-delete">' +
           '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>' +
@@ -790,23 +721,14 @@
     var form = document.getElementById('db-widget-form');
     if (!form) return;
 
-    // Live preview bij elk input event
     form.addEventListener('input', updatePreview);
-
-    // Kleurpicker synchronisatie
     initColorInputs(form);
-
-    // Opslaan
     form.addEventListener('submit', saveWidget);
 
-    // Terug knop
     document.getElementById('db-btn-back').addEventListener('click', showList);
     document.getElementById('db-btn-cancel').addEventListener('click', showList);
-
-    // Verwijderen
     document.getElementById('db-btn-delete').addEventListener('click', deleteWidget);
 
-    // Embed code kopiëren
     var copyBtn = document.getElementById('db-embed-copy-btn');
     if (copyBtn) {
       copyBtn.addEventListener('click', function () {
@@ -829,11 +751,9 @@
     var content = document.getElementById('db-content');
     if (!content) return;
 
-    // Views aanmaken
     content.appendChild(buildListView());
     content.appendChild(buildFormView());
 
-    // Toast element
     var toastEl = document.createElement('div');
     toastEl.id = 'db-toast';
     toastEl.className = 'db-toast';
@@ -842,25 +762,19 @@
       '<span class="db-toast-msg"></span>';
     document.body.appendChild(toastEl);
 
-    // Navigatie
     document.getElementById('db-btn-new').addEventListener('click', function () { showForm(null); });
 
     document.querySelectorAll('.db-nav-item').forEach(function (item) {
       item.addEventListener('click', function (e) {
         e.preventDefault();
-        var view = item.dataset.view;
-        if (view === 'list') showList();
+        if (item.dataset.view === 'list') showList();
       });
     });
 
-    // Form events
     bindFormEvents();
-
-    // Begin op lijst view
     showList();
   }
 
-  // Start na DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
