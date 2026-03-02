@@ -132,6 +132,26 @@ app.put('/api/widgets/:id', function (req, res) {
   res.json(widget);
 });
 
+// Standalone embed code genereren (volledige widget JS inline, geen server nodig)
+app.get('/api/widgets/:id/embed', function (req, res) {
+  var widgets = readWidgets();
+  var widget  = widgets[req.params.id];
+  if (!widget) return res.status(404).json({ error: 'Widget niet gevonden' });
+
+  var widgetJs = fs.readFileSync(path.join(__dirname, '../widget/widget.js'), 'utf8');
+  var cfg = {
+    webhookUrl: widget.webhookUrl,
+    branding:   widget.branding || {},
+    theme:      widget.theme    || {}
+  };
+
+  // Single quotes escapen zodat data-config='...' veilig is
+  var cfgJson = JSON.stringify(cfg).replace(/'/g, '&#39;');
+  var snippet = '<script data-config=\'' + cfgJson + '\'>\n' + widgetJs + '\n<\/script>';
+
+  res.type('text/plain').send(snippet);
+});
+
 // Widget verwijderen
 app.delete('/api/widgets/:id', function (req, res) {
   var widgets = readWidgets();

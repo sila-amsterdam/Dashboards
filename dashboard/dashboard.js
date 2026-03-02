@@ -92,16 +92,13 @@
     return 'rgba(' + parseInt(m[1],16) + ',' + parseInt(m[2],16) + ',' + parseInt(m[3],16) + ',' + a + ')';
   }
 
-  // ─── Embed code genereren ────────────────────────────────────────────────────
+  // ─── Embed code ophalen (standalone, geen server nodig) ─────────────────────
 
-  function embedCode(widget) {
-    var src = API_BASE + '/widget.js';
-    var cfg = {
-      webhookUrl: widget.webhookUrl,
-      branding:   widget.branding || {},
-      theme:      widget.theme    || {}
-    };
-    return '<script\n  src="' + src + '"\n  data-config=\'' + JSON.stringify(cfg) + '\'>\n<\/script>';
+  function fetchEmbedCode(widgetId) {
+    return fetch(API_BASE + '/api/widgets/' + widgetId + '/embed').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    });
   }
 
   // ─── Widget kaart renderen ────────────────────────────────────────────────────
@@ -198,10 +195,12 @@
 
     grid.querySelectorAll('.btn-copy-embed').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var w = state.widgets.find(function (x) { return x.id === btn.dataset.id; });
-        if (!w) return;
-        copyText(embedCode(w));
-        toast('Embed code gekopieerd!');
+        fetchEmbedCode(btn.dataset.id)
+          .then(function (code) {
+            copyText(code);
+            toast('Embed code gekopieerd!');
+          })
+          .catch(function () { toast('Kon embed code niet ophalen.', 'error'); });
       });
     });
   }
@@ -277,12 +276,11 @@
 
     if (!widgetId) { block.classList.add('db-hidden'); return; }
     block.classList.remove('db-hidden');
-    var widget = state.widgets.find(function (x) { return x.id === widgetId; });
-    if (widget) {
-      pre.textContent = embedCode(widget);
-    } else {
-      API.get(widgetId).then(function (w) { pre.textContent = embedCode(w); });
-    }
+    pre.textContent = 'Laden…';
+
+    fetchEmbedCode(widgetId)
+      .then(function (code) { pre.textContent = code; })
+      .catch(function () { pre.textContent = 'Kon embed code niet laden.'; });
   }
 
   // ─── Views tonen ─────────────────────────────────────────────────────────────
@@ -706,7 +704,7 @@
                 '<h3>Embed code</h3>' +
               '</div>' +
               '<div class="db-section-body">' +
-                '<p style="font-size:13px;color:#64748b">Kopieer dit en plak het voor de <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:12px">&lt;/body&gt;</code> tag. De URL bevat <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:12px">localhost:3000</code> — vervang dit door jouw publieke serveradres bij live gebruik.</p>' +
+                '<p style="font-size:13px;color:#64748b">Kopieer dit en plak het voor de <code style="background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:12px">&lt;/body&gt;</code> tag. De widget werkt overal — geen eigen server nodig.</p>' +
                 '<div class="db-embed-block">' +
                   '<pre class="db-embed-code" id="db-embed-code-pre"></pre>' +
                   '<button type="button" class="db-embed-copy" id="db-embed-copy-btn">Kopieer</button>' +
