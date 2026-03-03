@@ -581,7 +581,7 @@
                 '</div>' +
                 '<div class="db-field">' +
                   '<label>Logo URL</label>' +
-                  '<input class="db-input db-input-url" name="branding.logoUrl" type="url" placeholder="https://jouwsite.nl/logo.png" />' +
+                  '<input class="db-input" name="branding.logoUrl" type="text" placeholder="https://jouwsite.nl/logo.png of data:image/..." />' +
                   '<small>Optioneel — getoond in de header en toggle-knop</small>' +
                 '</div>' +
                 '<div class="db-field">' +
